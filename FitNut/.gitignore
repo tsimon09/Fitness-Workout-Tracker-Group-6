@@ -1,0 +1,6 @@
+.mysql/
+.env*
+.postman/
+.venv/
+__pycache__/
+*.pyc
