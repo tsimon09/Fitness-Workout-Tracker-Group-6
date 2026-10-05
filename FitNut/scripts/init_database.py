@@ -1,4 +1,4 @@
-"""Create missing tables in the configured database. Existing records are kept."""
+"""Create the combined tables and basic choices in a fresh database."""
 import os
 import sys
 import time
@@ -41,8 +41,19 @@ def main():
     try:
         cursor = connection.cursor()
         try:
+            cursor.execute("SELECT column_name FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='users'")
+            columns = {row[0] for row in cursor.fetchall()}
+            if columns and not {'first_name', 'last_name'}.issubset(columns):
+                print('This database uses the older user table. Choose a fresh database for the combined design.', file=sys.stderr)
+                return 1
             for statement in table_statements():
                 cursor.execute(statement)
+            for meal in ('breakfast', 'lunch', 'dinner', 'snack'):
+                cursor.execute('INSERT IGNORE INTO meal_types (meal_type) VALUES (%s)', (meal,))
+            for unit in ('g', 'cup', 'serving', 'piece', 'ml'):
+                cursor.execute('INSERT IGNORE INTO units_of_measure (unit_name) VALUES (%s)', (unit,))
+            for activity in ('Walking', 'Running', 'Cycling', 'Swimming', 'Other'):
+                cursor.execute('INSERT IGNORE INTO activity_types (activity_name) VALUES (%s)', (activity,))
             connection.commit()
         finally:
             cursor.close()

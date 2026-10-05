@@ -14,7 +14,7 @@ accounts = Blueprint("accounts", __name__)
 COOKIE = "fitnut_session"
 SESSION_HOURS = 8
 DUMMY_HASH = generate_password_hash("unused-account-password")
-USER_COLUMNS = "user_id, full_name, email, role, status, created_at, last_online"
+USER_COLUMNS = "user_id, first_name, last_name, email, role, status, created_at, last_online"
 
 
 def token_hash(token):
@@ -42,7 +42,7 @@ def load_user():
     token = request.cookies.get(COOKIE, "")
     if token and len(token) <= 128:
         user = fetch_one(
-            "SELECT u.user_id, u.full_name, u.email, u.role, u.status, u.created_at, u.last_online, "
+            "SELECT u.user_id, u.first_name, u.last_name, u.email, u.role, u.status, u.created_at, u.last_online, "
             "s.expires_at FROM sessions s JOIN users u ON u.user_id = s.user_id "
             "WHERE s.token_hash = %s AND s.revoked_at IS NULL AND s.expires_at > UTC_TIMESTAMP(6)",
             (token_hash(token),),
@@ -86,7 +86,8 @@ def admin_required(html=False):
 @accounts.post("/register")
 def register():
     data = payload()
-    name = text(data, "full_name", 100)
+    first_name = text(data, "first_name", 50)
+    last_name = text(data, "last_name", 50)
     email = text(data, "email", 254).lower()
     if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
         raise ValueError("Enter a valid email address")
@@ -96,8 +97,8 @@ def register():
     if password != data.get("password_confirmation"):
         raise ValueError("Passwords do not match")
     try:
-        user_id, _ = execute("INSERT INTO users (full_name, email, password_hash) VALUES (%s, %s, %s)",
-                             (name, email, generate_password_hash(password)))
+        user_id, _ = execute("INSERT INTO users (first_name, last_name, email, password_hash) VALUES (%s, %s, %s, %s)",
+                             (first_name, last_name, email, generate_password_hash(password)))
         get_db().commit()
     except mysql.connector.IntegrityError as error:
         get_db().rollback()

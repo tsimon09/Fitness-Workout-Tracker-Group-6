@@ -55,10 +55,19 @@ if (-not (Test-Path -LiteralPath $credentialFile)) {
     throw 'The FitNut administrator credential file is missing. Existing data was not changed.'
 }
 Start-FitNutMySql
-foreach ($file in @('database/schema.sql', 'database/other-tables.sql')) {
-    $schema = Get-Content -LiteralPath (Join-Path $FitNutRoot $file) -Raw
-    $result = Invoke-FitNutSql -Sql $schema
-    if ($result.ExitCode -ne 0) { throw $result.Output }
+$FitNutPython = Join-Path $FitNutRoot '.venv\Scripts\python.exe'
+if (-not (Test-Path -LiteralPath $FitNutPython)) { & (Join-Path $PSScriptRoot 'setup-python.ps1') }
+$FitNutOldUser = $env:MYSQL_USER
+$FitNutOldPassword = $env:MYSQL_PASSWORD
+try {
+    $FitNutCredential = Import-Clixml -LiteralPath $credentialFile
+    $env:MYSQL_USER = $FitNutCredential.UserName
+    $env:MYSQL_PASSWORD = $FitNutCredential.GetNetworkCredential().Password
+    & $FitNutPython (Join-Path $PSScriptRoot 'init_database.py')
+    if ($LASTEXITCODE -ne 0) { throw 'FitNut database setup failed.' }
+} finally {
+    $env:MYSQL_USER = $FitNutOldUser
+    $env:MYSQL_PASSWORD = $FitNutOldPassword
 }
 $result = Invoke-FitNutSql -Sql 'SELECT VERSION(); SHOW TABLES FROM fitnut;'
 if ($result.ExitCode -ne 0) { throw $result.Output }

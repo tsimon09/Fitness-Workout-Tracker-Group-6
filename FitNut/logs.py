@@ -3,17 +3,20 @@ from flask import Blueprint, g, request
 from accounts import login_required
 from db import execute, fetch_all, fetch_one, get_db, to_json
 from validation import date_time, number, payload, text
+from log_data import LOG_TYPES, read_items, stored_values, remove_empty_meal
 
 logs = Blueprint("logs", __name__)
-LOG_TYPES = {
-    "food": {"table": "food_logs", "id": "food_log_id", "date": "logged_at", "title": "Food"},
-    "activity": {"table": "activity_logs", "id": "activity_log_id", "date": "performed_at", "title": "Activity"},
-    "sleep": {"table": "sleep_logs", "id": "sleep_log_id", "date": "sleep_start", "title": "Sleep"},
-}
 
 
 def checked_values(kind, data):
     if kind == "food":
+        event_id = data.get('eating_event_id')
+        if event_id not in (None, ''):
+            if isinstance(event_id, bool) or not str(event_id).isdigit() or not 0 < int(event_id) <= 2147483647:
+                raise ValueError('Choose a valid meal')
+            event_id = int(event_id)
+        else:
+            event_id = None
         meal = data.get("meal_type")
         if meal not in ("breakfast", "lunch", "dinner", "snack"):
             raise ValueError("Choose breakfast, lunch, dinner, or snack")
@@ -23,7 +26,9 @@ def checked_values(kind, data):
                 "calories": number(data, "calories", optional=True),
                 "protein_g": number(data, "protein_g", optional=True),
                 "carbs_g": number(data, "carbs_g", optional=True),
-                "fat_g": number(data, "fat_g", optional=True), "logged_at": date_time(data, "logged_at")}
+                "fat_g": number(data, "fat_g", optional=True), "fiber_g": number(data, "fiber_g", optional=True),
+                "logged_at": date_time(data, "logged_at"), "eating_event_id": event_id,
+                "meal_notes": text(data, "meal_notes", 2000, required=False)}
     if kind == "activity":
         return {"activity_name": text(data, "activity_name", 100),
                 "duration_minutes": number(data, "duration_minutes", positive=True),
@@ -55,15 +60,17 @@ def collection():
     kind = kind_for_request()
     setting = LOG_TYPES[kind]
     if request.method == "GET":
-        rows = fetch_all("SELECT * FROM " + setting["table"] + " WHERE user_id = %s ORDER BY " +
-                         setting["date"] + " DESC LIMIT 100", (g.user["user_id"],))
+        rows = read_items(kind)
         return {"items": to_json(rows)}
-    values = checked_values(kind, payload())
-    columns = ["user_id"] + list(values)
+    values = stored_values(kind, checked_values(kind, payload()))
+    columns = list(values)
     sql = "INSERT INTO " + setting["table"] + " (" + ", ".join(columns) + ") VALUES (" + ", ".join(["%s"] * len(columns)) + ")"
-    log_id, _ = execute(sql, (g.user["user_id"], *values.values()))
+    log_id, _ = execute(sql, tuple(values.values()))
     get_db().commit()
-    return {"message": "Record saved", "id": log_id}, 201
+    response = {"message": "Record saved", "id": log_id}
+    if kind == 'food':
+        response['eating_event_id'] = values['eating_event_id']
+    return response, 201
 
 
 @logs.route("/food-logs/<int:log_id>", methods=["PUT", "DELETE"])
@@ -73,17 +80,22 @@ def collection():
 def record(log_id):
     kind = kind_for_request()
     setting = LOG_TYPES[kind]
-    where = " WHERE " + setting["id"] + " = %s AND user_id = %s"
-    owner = (log_id, g.user["user_id"])
-    if not fetch_one("SELECT " + setting["id"] + " FROM " + setting["table"] + where, owner):
+    old = read_items(kind, log_id)
+    if not old:
         return {"error": "Record not found"}, 404
+    # The owned record was checked above; obtain a row lock before changing it.
+    primary_key = setting['key'].split('.')[-1]
+    where = ' WHERE ' + primary_key + ' = %s'
+    fetch_one('SELECT ' + primary_key + ' FROM ' + setting['table'] + where + ' FOR UPDATE', (log_id,))
     if request.method == "DELETE":
-        execute("DELETE FROM " + setting["table"] + where, owner)
+        execute("DELETE FROM " + setting["table"] + where, (log_id,))
         message = "Record deleted"
     else:
-        values = checked_values(kind, payload())
+        values = stored_values(kind, checked_values(kind, payload()))
         execute("UPDATE " + setting["table"] + " SET " + ", ".join(key + " = %s" for key in values) + where,
-                (*values.values(), *owner))
+                (*values.values(), log_id))
         message = "Record updated"
+    if kind == 'food':
+        remove_empty_meal(old['eating_event_id'])
     get_db().commit()
     return {"message": message}

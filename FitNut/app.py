@@ -12,6 +12,7 @@ load_dotenv(Path(__file__).with_name(".env.local"))
 from accounts import accounts, load_user, login_required, admin_required
 from db import close_db, fetch_all, fetch_one, to_json
 from logs import logs, LOG_TYPES
+from log_data import count_items, read_items, meal_choices
 
 app = Flask(__name__)
 trusted_hosts = [host.strip() for host in os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
@@ -82,8 +83,7 @@ def login_page():
 def dashboard():
     counts = {}
     for kind, settings in LOG_TYPES.items():
-        counts[kind] = fetch_one("SELECT COUNT(*) AS total FROM " + settings["table"] +
-                                 " WHERE user_id = %s", (g.user["user_id"],))["total"]
+        counts[kind] = count_items(kind)
     return render_template("dashboard.html", counts=counts)
 
 
@@ -94,16 +94,16 @@ def dashboard():
 def log_page():
     kind = request.path[1:]
     settings = LOG_TYPES[kind]
-    rows = fetch_all("SELECT * FROM " + settings["table"] +
-                     " WHERE user_id = %s ORDER BY " + settings["date"] + " DESC LIMIT 100",
-                     (g.user["user_id"],))
-    return render_template("logs.html", kind=kind, settings=settings, records=to_json(rows))
+    return render_template("logs.html", kind=kind, settings=settings, records=to_json(read_items(kind)),
+                           meals=to_json(meal_choices()) if kind == 'food' else [],
+                           units=fetch_all('SELECT unit_name FROM units_of_measure ORDER BY unit_name'),
+                           activities=fetch_all('SELECT activity_name FROM activity_types ORDER BY activity_name'))
 
 
 @app.get("/admin")
 @admin_required(html=True)
 def admin_page():
-    users = fetch_all("SELECT user_id, full_name, email, role, status, created_at, last_online "
+    users = fetch_all("SELECT user_id, first_name, last_name, email, role, status, created_at, last_online "
                       "FROM users ORDER BY user_id DESC LIMIT 200")
     return render_template("admin.html", users=to_json(users))
 

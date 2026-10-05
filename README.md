@@ -1,15 +1,21 @@
-# Fitness Workout Tracker — Group 6
+# Fitness Workout Tracker - Group 6
 
-The Sprint 2 Flask application is in [FitNut](FitNut/README.md). It includes registration, login, logout, database sessions, user/admin roles, and food, activity, and sleep records with a basic HTML interface.
+FitNut lets users create an account, log in, and save food, activity, and sleep records. The pages are kept simple for the Sprint 2 demo.
 
-## Run the application
+## Start the app
 
-Follow the Windows setup and run instructions in [FitNut/README.md](FitNut/README.md). Python 3.12+ and MySQL Server are required. The database setup scripts create local credentials; credentials and local database files are excluded from Git.
+Open the [FitNut guide](FitNut/README.md) for the setup commands, website instructions, and how to make an admin account. You need Python 3.12 or newer and MySQL Server on Windows.
 
-## Separate database for this application
+## Database
 
-`fitness_tracker_schema.sql` is the team's backup SQL file. It is preserved unchanged on this branch.
+The app uses one combined database design. It keeps the team's separate tables for meals, foods, units, activity types, and recorded activities. It also keeps the working account and login features, plus sleep records.
 
-This application uses a separate `fitnut` database and the scripts in `FitNut/database`. Its tables are `users`, `sessions`, `food_logs`, `activity_logs`, and `sleep_logs`. Its setup does not apply the backup SQL file.
+The app's SQL files are in `FitNut/database`. The [database guide](FitNut/database/README.md) explains what each table stores.
 
-The `sprint2-fitnut-app` branch adds this application as an option for the team to review and choose. It has not been merged into `main`.
+The original `fitness_tracker_schema.sql` file is kept unchanged as a reference. The app's setup does not run that file.
+
+## Branch
+
+This work is on `sprint2-fitnut-app` for the team to review. It has not been merged into `main`.
+
+Passwords, saved database records, and local test files are kept out of new commits.

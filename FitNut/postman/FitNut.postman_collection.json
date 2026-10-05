@@ -72,7 +72,7 @@
             "url": "{{base_url}}/register",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"full_name\": \"Demo User\",\n  \"email\": \"{{demo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"password_confirmation\": \"{{demo_password}}\"\n}",
+              "raw": "{\n  \"first_name\": \"Demo\",\n  \"last_name\": \"User\",\n  \"email\": \"{{demo_email}}\",\n  \"password\": \"{{demo_password}}\",\n  \"password_confirmation\": \"{{demo_password}}\"\n}",
               "options": {
                 "raw": {
                   "language": "json"
