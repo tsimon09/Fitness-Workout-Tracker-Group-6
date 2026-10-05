@@ -3,6 +3,7 @@ import unittest
 import uuid
 from datetime import datetime, timedelta, timezone
 from werkzeug.security import check_password_hash
+from werkzeug.middleware.proxy_fix import ProxyFix
 from app import app
 from accounts import COOKIE, token_hash
 from db import execute, fetch_one, get_db
@@ -166,6 +167,26 @@ class FitNutTests(unittest.TestCase):
         self.assertEqual(self.client.post("/register", json={"full_name": "Name", "email": "bad", "password": PASSWORD, "password_confirmation": PASSWORD}).status_code, 400)
         self.assertEqual(self.client.post("/login", json={"email": "' OR '1'='1", "password": PASSWORD}).status_code, 401)
         self.assertEqual(self.client.get("/food-logs").status_code, 401)
+
+    def test_https_login_behind_hosting_proxy(self):
+        old_hosts = app.config["TRUSTED_HOSTS"]
+        old_secure = app.config["SESSION_COOKIE_SECURE"]
+        old_wsgi = app.wsgi_app
+        self.addCleanup(setattr, app, "wsgi_app", old_wsgi)
+        self.addCleanup(app.config.update, TRUSTED_HOSTS=old_hosts, SESSION_COOKIE_SECURE=old_secure)
+        app.config.update(TRUSTED_HOSTS=["fitnut.example", "healthcheck.railway.app"], SESSION_COOKIE_SECURE=True)
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
+        base = "http://fitnut.example"
+        proxy_headers = {"X-Forwarded-Proto": "https", "Origin": "https://fitnut.example"}
+        response = self.client.post("/login", base_url=base, headers=proxy_headers,
+                                    json={"email": self.email, "password": PASSWORD})
+        self.assertEqual(response.status_code, 200, response.json)
+        self.assertIn("Secure", response.headers["Set-Cookie"])
+        headers = {**proxy_headers, "X-CSRF-Token": response.json["csrf_token"]}
+        self.assertEqual(self.client.post("/food-logs", base_url=base, headers=headers, json=FOOD).status_code, 201)
+        self.assertEqual(self.client.post("/logout", base_url=base, headers=headers, json={}).status_code, 200)
+        self.assertEqual(self.client.get("/health", base_url="http://healthcheck.railway.app").status_code, 200)
+        self.assertEqual(self.client.get("/health", base_url="http://unapproved.example").status_code, 400)
 
 
 if __name__ == "__main__":

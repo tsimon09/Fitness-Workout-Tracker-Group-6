@@ -5,6 +5,7 @@ from pathlib import Path
 import mysql.connector
 from dotenv import load_dotenv
 from flask import Flask, g, redirect, render_template, request
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 load_dotenv(Path(__file__).with_name(".env.local"))
 
@@ -13,8 +14,14 @@ from db import close_db, fetch_all, fetch_one, to_json
 from logs import logs, LOG_TYPES
 
 app = Flask(__name__)
-app.config.update(MAX_CONTENT_LENGTH=65536, TRUSTED_HOSTS=["localhost", "127.0.0.1"],
+trusted_hosts = [host.strip() for host in os.getenv("TRUSTED_HOSTS", "localhost,127.0.0.1").split(",") if host.strip()]
+if os.getenv("RAILWAY_PUBLIC_DOMAIN"):
+    trusted_hosts.extend([os.environ["RAILWAY_PUBLIC_DOMAIN"], "healthcheck.railway.app"])
+app.config.update(MAX_CONTENT_LENGTH=65536, TRUSTED_HOSTS=trusted_hosts,
                   SESSION_COOKIE_SECURE=os.getenv("COOKIE_SECURE", "false").lower() == "true")
+# The hosting server forwards HTTPS traffic to Flask over an internal connection.
+if os.getenv("TRUST_PROXY", "false").lower() == "true":
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1)
 app.register_blueprint(accounts)
 app.register_blueprint(logs)
 app.before_request(load_user)
@@ -47,7 +54,7 @@ def invalid_database_value(error):
 @app.errorhandler(mysql.connector.Error)
 def database_unavailable(error):
     app.logger.warning("Database operation failed, error code %s", error.errno)
-    return {"error": "Cannot reach the database. Start FitNut MySQL and try again."}, 503
+    return {"error": "The database is unavailable. Please try again shortly."}, 503
 
 
 @app.get("/health")

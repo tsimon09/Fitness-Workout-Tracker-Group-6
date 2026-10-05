@@ -4,6 +4,8 @@ FitNut is a small Flask and MySQL app for keeping track of food, activity, and s
 
 ## Start FitNut
 
+To make the app available to people outside your computer, see [the hosting guide](HOSTING.md).
+
 Open PowerShell in this project folder and run:
 
 ```powershell
