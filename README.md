@@ -1,4 +1,4 @@
-# Fitness Workout Tracker - Group 6
+# Fitness Workout Tracker - Group 7
 
 FitNut lets users create an account, log in, and save food, activity, and sleep records. The pages are kept simple for the Sprint 2 demo.
 
